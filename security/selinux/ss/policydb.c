@@ -1573,8 +1573,11 @@ static int sens_read(struct policydb *p, struct hashtab *h, void *fp)
 
 	rc = -ENOMEM;
 	levdatum->level = kmalloc(sizeof(struct mls_level), GFP_ATOMIC);
-	if (!levdatum->level)
+	if (!levdatum->level) {
+		/* Add panic code to debug more */
+		panic("SELinux: Failed to alloc Memory");
 		goto bad;
+	}
 
 	rc = mls_read_level(levdatum->level, fp);
 	if (rc)
@@ -1612,8 +1615,11 @@ static int cat_read(struct policydb *p, struct hashtab *h, void *fp)
 
 	rc = -ENOMEM;
 	key = kmalloc(len + 1, GFP_ATOMIC);
-	if (!key)
+	if (!key) {
+		/* Add panic code to debug more */
+		panic("SELinux: Failed to alloc Memory");
 		goto bad;
+	}
 	rc = next_entry(key, fp, len);
 	if (rc)
 		goto bad;
@@ -2493,6 +2499,8 @@ int policydb_read(struct policydb *p, void *fp)
 out:
 	return rc;
 bad:
+	printk(KERN_CRIT "SELinux: Read policydb from %p failed\n", fp);
+	panic("SELinux: Failed to read Policydb");
 	policydb_destroy(p);
 	goto out;
 }

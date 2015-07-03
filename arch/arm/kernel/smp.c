@@ -45,6 +45,9 @@
 #include <asm/smp_plat.h>
 #include <asm/virt.h>
 #include <asm/mach/arch.h>
+#ifdef CONFIG_SEC_DEBUG
+#include <mach/sec_debug.h>
+#endif
 
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
@@ -153,7 +156,11 @@ static int platform_cpu_disable(unsigned int cpu)
 	 * since this is special on a lot of platforms, e.g. because
 	 * of clock tick interrupts.
 	 */
+#ifdef CONFIG_ARCH_MSM8939
+	return cpu == 4 ? -EPERM : 0;
+#else
 	return cpu == 0 ? -EPERM : 0;
+#endif
 }
 /*
  * __cpu_disable runs on the processor to be shutdown.
@@ -592,6 +599,9 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 		raw_spin_lock(&stop_lock);
 		printk(KERN_CRIT "CPU%u: stopping\n", cpu);
 		dump_stack();
+#ifdef CONFIG_SEC_DEBUG
+		sec_debug_dump_stack();
+#endif
 		raw_spin_unlock(&stop_lock);
 	}
 

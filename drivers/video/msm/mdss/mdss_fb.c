@@ -54,6 +54,10 @@
 
 #include "mdss_fb.h"
 #include "mdss_mdp_splash_logo.h"
+#include "mdss_debug.h"
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+#include "samsung/ss_dsi_panel_common.h" /* UTIL HEADER */
+#endif
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
@@ -931,9 +935,9 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	int (*update_ad_input)(struct msm_fb_data_type *mfd);
 	u32 temp = bkl_lvl;
 
-	if (((!mfd->panel_power_on && mfd->dcm_state != DCM_ENTER)
-		|| !mfd->bl_updated) && !IS_CALIB_MODE_BL(mfd) &&
-		mfd->panel_info->cont_splash_enabled) {
+	if ((((!mfd->panel_power_on && mfd->dcm_state != DCM_ENTER)
+					|| !mfd->bl_updated) && !IS_CALIB_MODE_BL(mfd)) ||
+			mfd->panel_info->cont_splash_enabled) {
 		mfd->unset_bl_level = bkl_lvl;
 		return;
 	} else {
@@ -958,7 +962,6 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 			return;
 		}
 		pdata->set_backlight(pdata, temp);
-		mfd->bl_prev_level = mfd->bl_level;
 		mfd->bl_level = bkl_lvl;
 		mfd->bl_level_scaled = temp;
 
@@ -996,12 +999,20 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	int ret = 0;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		struct samsung_display_driver_data *vdd = samsung_get_vdd();
+#endif
 
 	if (!op_enable)
 		return -EPERM;
 
 	if (mfd->dcm_state == DCM_ENTER)
 		return -EPERM;
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		if (info->node <= (SUPPORT_PANEL_COUNT - 1))
+					vdd->vdd_blank_mode[info->node] =  blank_mode;
+#endif
 
 	switch (blank_mode) {
 	case FB_BLANK_UNBLANK:
@@ -1022,12 +1033,15 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 					msecs_to_jiffies(mfd->idle_time));
 		}
 
-		mutex_lock(&mfd->bl_lock);
-		if (!mfd->bl_updated) {
-			mfd->bl_updated = 1;
-			mdss_fb_set_backlight(mfd, mfd->unset_bl_level);
+		/* Reset the backlight only if the panel was off */
+		if (!mfd->panel_power_on) {
+			mutex_lock(&mfd->bl_lock);
+			if (!mfd->bl_updated) {
+				mfd->bl_updated = 1;
+				mdss_fb_set_backlight(mfd, mfd->unset_bl_level);
+			}
+			mutex_unlock(&mfd->bl_lock);
 		}
-		mutex_unlock(&mfd->bl_lock);
 		break;
 
 	case FB_BLANK_VSYNC_SUSPEND:
@@ -1050,10 +1064,11 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 			mfd->op_enable = false;
 			curr_pwr_state = mfd->panel_power_on;
 			mutex_lock(&mfd->bl_lock);
+#if !defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 			mdss_fb_set_backlight(mfd, 0);
+#endif
 			mfd->panel_power_on = false;
 			mfd->bl_updated = 0;
-			mfd->unset_bl_level = mfd->bl_prev_level;
 			mutex_unlock(&mfd->bl_lock);
 
 			ret = mfd->mdp.off_fnc(mfd);
@@ -1819,7 +1834,6 @@ static void __mdss_fb_wait_for_fence_sub(struct msm_sync_pt_data *sync_pt_data,
 	struct sync_fence **fences, int fence_cnt)
 {
 	int i, ret = 0;
-
 	/* buf sync */
 	for (i = 0; i < fence_cnt && !ret; i++) {
 		ret = sync_fence_wait(fences[i],
@@ -1834,14 +1848,6 @@ static void __mdss_fb_wait_for_fence_sub(struct msm_sync_pt_data *sync_pt_data,
 		}
 		sync_fence_put(fences[i]);
 	}
-
-	if (ret < 0) {
-		pr_err("%s: sync_fence_wait failed! ret = %x\n",
-				sync_pt_data->fence_name, ret);
-		for (; i < fence_cnt; i++)
-			sync_fence_put(fences[i]);
-	}
-
 }
 
 int mdss_fb_wait_for_fence(struct msm_sync_pt_data *sync_pt_data)
@@ -2172,6 +2178,7 @@ static int __mdss_fb_perform_commit(struct msm_fb_data_type *mfd)
 		mdss_fb_release_kickoff(mfd);
 		mdss_fb_signal_timeline(sync_pt_data);
 	}
+
 	return ret;
 }
 
@@ -2193,6 +2200,7 @@ static int __mdss_fb_display_thread(void *data)
 				mfd->index);
 
 	while (1) {
+		ATRACE_BEGIN(__func__);
 		wait_event(mfd->commit_wait_q,
 				(atomic_read(&mfd->commits_pending) ||
 				 kthread_should_stop()));
@@ -2203,6 +2211,7 @@ static int __mdss_fb_display_thread(void *data)
 		ret = __mdss_fb_perform_commit(mfd);
 		atomic_dec(&mfd->commits_pending);
 		wake_up_all(&mfd->idle_wait_q);
+		ATRACE_END(__func__);
 	}
 
 	mdss_fb_release_kickoff(mfd);
@@ -2732,6 +2741,7 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 	if (mfd->shutdown_pending)
 		return -EPERM;
 
+	ATRACE_BEGIN(__func__);
 	atomic_inc(&mfd->ioctl_ref_cnt);
 
 	mdss_fb_power_setting_idle(mfd);
@@ -2784,7 +2794,9 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 		break;
 
 	case MSMFB_DISPLAY_COMMIT:
+		ATRACE_BEGIN("MSMFB_DISPLAY_COMMIT");
 		ret = mdss_fb_display_commit(info, argp);
+		ATRACE_END("MSMFB_DISPLAY_COMMIT");
 		break;
 
 	case MSMFB_LPM_ENABLE:
@@ -2810,6 +2822,7 @@ exit:
 	if (!atomic_dec_return(&mfd->ioctl_ref_cnt))
 		wake_up_all(&mfd->ioctl_q);
 
+	ATRACE_END("__func__");
 	return ret;
 }
 

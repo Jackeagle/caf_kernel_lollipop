@@ -20,6 +20,7 @@
 
 #include "mdss_mdp.h"
 #include "mdss_mdp_trace.h"
+#include "mdss_debug.h"
 
 #define SMP_MB_SIZE		(mdss_res->smp_mb_size)
 #define SMP_MB_CNT		(mdss_res->smp_mb_cnt)
@@ -76,7 +77,6 @@ int mdss_mdp_pipe_panic_signal_ctrl(struct mdss_mdp_pipe *pipe, bool enable)
 	writel_relaxed(panic_robust_ctrl,
 				mdata->mdp_base + MMSS_MDP_PANIC_ROBUST_CTRL);
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
-
 end:
 	return 0;
 }
@@ -1184,7 +1184,6 @@ static int mdss_mdp_image_setup(struct mdss_mdp_pipe *pipe,
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
 	struct mdss_rect sci, dst, src;
 	bool rotation = false;
-	u32 panel_orientation = 0;
 
 	pr_debug("pnum=%d wh=%dx%d src={%d,%d,%d,%d} dst={%d,%d,%d,%d}\n",
 			pipe->num, pipe->img_width, pipe->img_height,
@@ -1229,15 +1228,6 @@ static int mdss_mdp_image_setup(struct mdss_mdp_pipe *pipe,
 	    !pipe->mixer_left->ctl->is_video_mode &&
 	    !pipe->src_split_req)
 		mdss_mdp_crop_rect(&src, &dst, &sci);
-
-	if (!(pipe->mixer_left->rotator_mode)) {
-		panel_orientation = pipe->mixer_left->ctl->mfd->panel_orientation;
-		if (panel_orientation & MDP_FLIP_LR)
-			dst.x =  pipe->mixer_left->ctl->roi.w - dst.x - dst.w;
-
-		if (panel_orientation & MDP_FLIP_UD)
-			dst.y =  pipe->mixer_left->ctl->roi.h - dst.y - dst.h;
-	}
 
 	src_size = (src.h << 16) | src.w;
 	src_xy = (src.y << 16) | src.x;
@@ -1323,6 +1313,8 @@ static int mdss_mdp_format_setup(struct mdss_mdp_pipe *pipe)
 
 	pr_debug("pnum=%d format=%d opmode=%x\n", pipe->num, fmt->format,
 			opmode);
+
+	MDSS_XLOG(pipe->num, fmt->format, opmode);
 
 	chroma_samp = fmt->chroma_sample;
 	if (pipe->flags & MDP_SOURCE_ROTATED_90) {
@@ -1433,6 +1425,8 @@ static int mdss_mdp_src_addr_setup(struct mdss_mdp_pipe *pipe,
 				&& (pipe->src_fmt->element[0] == C1_B_Cb))
 		swap(data.p[1].addr, data.p[2].addr);
 
+	MDSS_XLOG(pipe->num, data.p[0].addr, data.p[1].addr, data.p[2].addr, data.p[3].addr);
+
 	mdss_mdp_pipe_write(pipe, MDSS_MDP_REG_SSPP_SRC0_ADDR, data.p[0].addr);
 	mdss_mdp_pipe_write(pipe, MDSS_MDP_REG_SSPP_SRC1_ADDR, data.p[1].addr);
 	mdss_mdp_pipe_write(pipe, MDSS_MDP_REG_SSPP_SRC2_ADDR, data.p[2].addr);
@@ -1509,6 +1503,8 @@ int mdss_mdp_pipe_queue_data(struct mdss_mdp_pipe *pipe,
 
 	pr_debug("pnum=%x mixer=%d play_cnt=%u\n", pipe->num,
 		 pipe->mixer_left->num, pipe->play_cnt);
+
+	MDSS_XLOG(pipe->num, pipe->mixer_left->num, pipe->play_cnt);
 
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 	ctl = pipe->mixer_left->ctl;

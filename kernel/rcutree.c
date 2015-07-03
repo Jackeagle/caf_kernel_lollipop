@@ -53,6 +53,9 @@
 #include <linux/delay.h>
 #include <linux/stop_machine.h>
 #include <linux/random.h>
+#ifdef CONFIG_RCU_STALL_DEBUG_PATCH
+#include <soc/qcom/watchdog.h>
+#endif
 
 #include "rcutree.h"
 #include <trace/events/rcu.h>
@@ -900,9 +903,16 @@ static void print_other_cpu_stall(struct rcu_state *rsp)
 	       rsp->gpnum, rsp->completed, totqlen);
 	if (ndetected == 0)
 		printk(KERN_ERR "INFO: Stall ended before state dump start\n");
+#ifdef CONFIG_RCU_STALL_DEBUG_PATCH
+	else {
+		msm_trigger_wdog_bite();
+		trigger_all_cpu_backtrace();
+		rcu_dump_cpu_stacks(rsp);
+	}
+#else
 	else if (!trigger_all_cpu_backtrace())
 		rcu_dump_cpu_stacks(rsp);
-
+#endif
 	/* Complain about tasks blocking the grace period. */
 
 	rcu_print_detail_task_stall(rsp);

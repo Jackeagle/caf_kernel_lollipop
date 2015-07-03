@@ -329,6 +329,7 @@ int32_t msm_sensor_driver_probe(void *setting)
 	int c, end;
 	struct msm_sensor_power_setting     power_down_setting_t;
 	unsigned long mount_pos = 0;
+	int probe_fail = 0;
 
 	/* Validate input parameters */
 	if (!setting) {
@@ -570,7 +571,8 @@ int32_t msm_sensor_driver_probe(void *setting)
 	rc = s_ctrl->func_tbl->sensor_power_up(s_ctrl);
 	if (rc < 0) {
 		pr_err("%s power up failed", slave_info->sensor_name);
-		goto FREE_CAMERA_INFO;
+		probe_fail = rc;
+//		goto FREE_CAMERA_INFO;
 	}
 
 	pr_err("%s probe succeeded", slave_info->sensor_name);
@@ -593,6 +595,21 @@ int32_t msm_sensor_driver_probe(void *setting)
 	if (rc < 0) {
 		pr_err("failed: camera creat v4l2 rc %d", rc);
 		goto CAMERA_POWER_DOWN;
+	}
+
+	memcpy(slave_info->subdev_name, s_ctrl->msm_sd.sd.entity.name,
+		sizeof(slave_info->subdev_name));
+	slave_info->is_probe_succeed = 1;
+	slave_info->sensor_info.session_id = s_ctrl->sensordata->sensor_info->session_id;
+	for (i = 0; i < SUB_MODULE_MAX; i++) {
+		slave_info->sensor_info.subdev_id[i] =
+			s_ctrl->sensordata->sensor_info->subdev_id[i];
+		pr_err("sensor_subdev_id = %d i = %d\n",slave_info->sensor_info.subdev_id[i], i);
+	}
+	if (copy_to_user((void __user *)setting,
+		(void *)slave_info, sizeof(*slave_info))) {
+		pr_err("%s:%d copy failed\n", __func__, __LINE__);
+		rc = -EFAULT;
 	}
 
 	/* Power down */
@@ -619,6 +636,10 @@ int32_t msm_sensor_driver_probe(void *setting)
 
 	/*Save sensor info*/
 	s_ctrl->sensordata->cam_slave_info = slave_info;
+
+	if(probe_fail) {
+		rc = probe_fail;
+	}
 
 	return rc;
 

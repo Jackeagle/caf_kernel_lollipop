@@ -83,6 +83,12 @@ struct mdss_pll_resources {
 	 * feature is disabled.
 	 */
 	bool		handoff_resources;
+
+    /*
+	 * PLL index if multiple index are available. Eg. in case of
+	 * DSI we have 2 plls.
+	 */
+	uint32_t index;
 };
 
 int mdss_pll_resource_enable(struct mdss_pll_resources *pll_res, bool enable);

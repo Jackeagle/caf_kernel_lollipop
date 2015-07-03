@@ -799,21 +799,17 @@ static int msm8939_gpio_set_mux_ctl(void)
 	pr_debug("%s:val_spkr_mux gpio %x\n", __func__, val);
 	iounmap(vaddr);
 
-	vaddr = ioremap(0x103f004, 4);
-	if (!vaddr) {
+	vaddr = ioremap(0x103f004 , 4);
+	if (!vaddr)
 		pr_err("%s ioremap failure for addr\n",
 					__func__);
-		return -ENOMEM;
-	}
 	val = ioread32(vaddr);
 	pr_debug("%s:val1 %x\n", __func__, val);
 	iounmap(vaddr);
-	vaddr = ioremap(0x103f000, 4);
-	if (!vaddr) {
+	vaddr = ioremap(0x103f000 , 4);
+	if (!vaddr)
 		pr_err("%s ioremap failure for addr2\n",
 					__func__);
-		return -ENOMEM;
-	}
 	val = ioread32(vaddr);
 	pr_debug("%s:val2 %x\n", __func__, val);
 	iounmap(vaddr);
@@ -2152,14 +2148,13 @@ static int msm8939_asoc_machine_probe(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = &snd_soc_card_msm;
 	struct msm8939_asoc_mach_data *pdata = NULL;
-	int ret;
+	int ret=0;
 
 	pdata = devm_kzalloc(&pdev->dev,
 			sizeof(struct msm8939_asoc_mach_data), GFP_KERNEL);
 	if (!pdata) {
 		dev_err(&pdev->dev, "Can't allocate msm8939_asoc_mach_data\n");
-		ret = -ENOMEM;
-		goto err;
+		return -ENOMEM; 
 	}
 
 	pdev->id = 0;

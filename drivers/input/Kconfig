@@ -183,6 +183,13 @@ config INPUT_KEYRESET
 	  To compile this driver as a module, choose M here: the
 	  module will be called keyreset.
 
+config INPUT_BOOSTER
+	tristate "input booster"
+	depends on INPUT
+	default n
+	help
+	  Say Y here if you want to boost when some keys and touches are pressed. If unsure, say N.
+
 comment "Input Device Drivers"
 
 source "drivers/input/keyboard/Kconfig"

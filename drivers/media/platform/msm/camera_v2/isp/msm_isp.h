@@ -19,7 +19,7 @@
 #include <linux/io.h>
 #include <linux/list.h>
 #include <linux/delay.h>
-#include <linux/avtimer_kernel.h>
+#include <linux/avtimer.h>
 #include <media/v4l2-subdev.h>
 #include <media/msmb_isp.h>
 #include <linux/msm-bus.h>
@@ -42,6 +42,15 @@
 #define MAX_NUM_STATS_COMP_MASK 2
 #define MAX_INIT_FRAME_DROP 31
 #define ISP_Q2 (1 << 2)
+
+#define AVTIMER_MSW_PHY_ADDR 0xFE05300C
+#define AVTIMER_LSW_PHY_ADDR 0xFE053008
+#define AVTIMER_MSW_PHY_ADDR_8916 0x7706010
+#define AVTIMER_LSW_PHY_ADDR_8916 0x770600C
+#define AVTIMER_MODE_CTL_PHY_ADDR_8916 0x7706040
+/*AVTimer h/w is configured to generate 27Mhz ticks*/
+#define AVTIMER_TICK_SCALER_8916 27
+#define AVTIMER_ITERATION_CTR 16
 
 #define VFE_PING_FLAG 0xFFFFFFFF
 #define VFE_PONG_FLAG 0x0
@@ -183,8 +192,6 @@ struct msm_vfe_core_ops {
 	void (*init_vbif_counters) (struct vfe_device *vfe_dev);
 	void (*vbif_clear_counters) (struct vfe_device *vfe_dev);
 	void (*vbif_read_counters) (struct vfe_device *vfe_dev);
-	int (*get_regupdate_status) (uint32_t irq_status0,
-		uint32_t irq1_mask);
 };
 struct msm_vfe_stats_ops {
 	int (*get_stats_idx) (enum msm_isp_stats_type stats_type);
@@ -469,12 +476,6 @@ struct msm_vbif_cntrs {
 	int total_vbif_cnt_2;
 };
 
-struct msm_vfe_hw_init_parms {
-	const char *entries;
-	const char *regs;
-	const char *settings;
-};
-
 struct vfe_device {
 	struct platform_device *pdev;
 	struct msm_sd_subdev subdev;
@@ -502,19 +503,13 @@ struct vfe_device {
 	struct mutex core_mutex;
 
 	atomic_t irq_cnt;
-	atomic_t reg_update_cnt;
 	uint8_t taskletq_idx;
-	uint8_t taskletq_reg_update_idx;
 	spinlock_t  tasklet_lock;
 	spinlock_t  shared_data_lock;
-	spinlock_t  sof_lock;
 	struct list_head tasklet_q;
-	struct list_head tasklet_regupdate_q;
 	struct tasklet_struct vfe_tasklet;
 	struct msm_vfe_tasklet_queue_cmd
 	tasklet_queue_cmd[MSM_VFE_TASKLETQ_SIZE];
-	struct msm_vfe_tasklet_queue_cmd
-		tasklet_regupdate_queue_cmd[MSM_VFE_TASKLETQ_SIZE];
 	uint32_t vfe_hw_version;
 	struct msm_vfe_hardware_info *hw_info;
 	struct msm_vfe_axi_shared_data axi_data;
@@ -525,10 +520,16 @@ struct vfe_device {
 	int vfe_clk_idx;
 	uint32_t vfe_open_cnt;
 	uint8_t vt_enable;
+	void __iomem *p_avtimer_msw;
+	void __iomem *p_avtimer_lsw;
+	void __iomem *p_avtimer_ctl;
+	uint8_t avtimer_scaler;
 	uint8_t ignore_error;
 	struct msm_isp_statistics *stats;
 	struct msm_vbif_cntrs vbif_cntrs;
 	uint32_t vfe_ub_size;
+	uint32_t frame_id;
+	uint32_t eof_event_occur;
 };
 
 #endif

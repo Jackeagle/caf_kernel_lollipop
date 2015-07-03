@@ -25,6 +25,9 @@
 #include "mdss-edp-pll.h"
 #include "mdss-dsi-pll.h"
 #include "mdss-hdmi-pll.h"
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+#include "../../../video/msm/mdss/samsung/ss_dsi_panel_common.h" /* UTIL HEADER */
+#endif
 
 int mdss_pll_resource_enable(struct mdss_pll_resources *pll_res, bool enable)
 {
@@ -194,6 +197,9 @@ static int mdss_pll_probe(struct platform_device *pdev)
 	struct resource *pll_base_reg;
 	struct resource *phy_base_reg;
 	struct mdss_pll_resources *pll_res;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	struct samsung_display_driver_data *vdd = samsung_get_vdd();
+#endif
 
 	if (!pdev->dev.of_node) {
 		pr_err("MDSS pll driver only supports device tree probe\n");
@@ -216,6 +222,13 @@ static int mdss_pll_probe(struct platform_device *pdev)
 	}
 	platform_set_drvdata(pdev, pll_res);
 
+	rc = of_property_read_u32(pdev->dev.of_node, "cell-index",
+			&pll_res->index);
+	if (rc) {
+		pr_err("Unable to get the cell-index rc=%d\n", rc);
+		pll_res->index = 0;
+	}
+
 	pll_base_reg = platform_get_resource_byname(pdev,
 						IORESOURCE_MEM, "pll_base");
 	if (!pll_base_reg) {
@@ -231,6 +244,11 @@ static int mdss_pll_probe(struct platform_device *pdev)
 		rc = -ENOMEM;
 		goto io_error;
 	}
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	if (!strcmp(label, "MDSS DSI 0 PLL") || !strcmp(label, "MDSS DSI 1 PLL"))
+		vdd->dump_info[pll_res->index].dsi_pll.virtual_addr = (size_t)pll_res->pll_base;
+#endif
 
 	rc = mdss_pll_resource_parse(pdev, pll_res);
 	if (rc) {

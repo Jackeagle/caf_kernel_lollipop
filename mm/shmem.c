@@ -965,7 +965,16 @@ static inline struct page *shmem_swapin(swp_entry_t swap, gfp_t gfp,
 static inline struct page *shmem_alloc_page(gfp_t gfp,
 			struct shmem_inode_info *info, pgoff_t index)
 {
-	return alloc_page(gfp);
+	struct page * page;
+
+	page = alloc_page(gfp);
+
+	if (page && is_cma_pageblock(page)) {
+		__free_page(page);
+		page = alloc_pages(gfp & ~__GFP_MOVABLE, 0);
+	}
+
+	return page;
 }
 #endif /* CONFIG_NUMA */
 

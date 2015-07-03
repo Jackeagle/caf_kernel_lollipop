@@ -44,6 +44,10 @@
 #include "pm-boot.h"
 #include "../../../arch/arm/mach-msm/clock.h"
 
+#ifdef CONFIG_SEC_DEBUG
+#include <mach/sec_debug.h>
+#endif
+
 #define SCM_CMD_TERMINATE_PC	(0x2)
 #define SCM_CMD_CORE_HOTPLUGGED (0x10)
 #define SCM_FLUSH_FLAG_MASK	(0x3)
@@ -234,7 +238,11 @@ static bool __ref msm_pm_spm_power_collapse(
 	void *entry;
 	bool collapsed = 0;
 	int ret;
+#ifdef CONFIG_ARCH_MSM8939
+	bool save_cpu_regs = ((cpu==4) ? 1:0) || from_idle;
+#else
 	bool save_cpu_regs = !cpu || from_idle;
+#endif
 
 	if (MSM_PM_DEBUG_POWER_COLLAPSE & msm_pm_debug_mask)
 		pr_info("CPU%u: %s: notify_rpm %d\n",
@@ -257,12 +265,20 @@ static bool __ref msm_pm_spm_power_collapse(
 
 	msm_jtag_save_state();
 
+#ifdef CONFIG_SEC_DEBUG
+        secdbg_sched_msg("+pc(I:%d,R:%d)", from_idle, notify_rpm);
+#endif
+
 #ifdef CONFIG_CPU_V7
 	collapsed = save_cpu_regs ?
 		!cpu_suspend(0, msm_pm_collapse) : msm_pm_pc_hotplug();
 #else
 	collapsed = save_cpu_regs ?
 		!cpu_suspend(0) : msm_pm_pc_hotplug();
+#endif
+
+#ifdef CONFIG_SEC_DEBUG
+        secdbg_sched_msg("-pc(%d)", collapsed);
 #endif
 
 	msm_jtag_restore_state();
@@ -777,8 +793,10 @@ static int msm_pm_clk_init(struct platform_device *pdev)
 		if (IS_ERR(clk)) {
 			if (cpu && synced_clocks)
 				return 0;
-			else
+			else{
+				pr_info("%s: clk for cpu %d PTR_ERR: (%ld)\n", __func__,  cpu, PTR_ERR(clk));
 				return PTR_ERR(clk);
+			}
 		}
 		per_cpu(cpu_clks, cpu) = clk;
 	}
@@ -821,6 +839,7 @@ static int msm_cpu_pm_probe(struct platform_device *pdev)
 			goto skip_save_imem;
 		msm_pc_debug_counters_imem = devm_ioremap(&pdev->dev,
 						res->start, resource_size(res));
+		pr_info("%s: msm_pc_debug_counters_imem is allocated as %x \n", __func__, (unsigned int)msm_pc_debug_counters_imem);
 		if (msm_pc_debug_counters_imem) {
 			writel_relaxed(msm_pc_debug_counters_phys,
 					msm_pc_debug_counters_imem);
@@ -840,7 +859,7 @@ skip_save_imem:
 
 		ret = msm_pm_clk_init(pdev);
 		if (ret) {
-			pr_info("msm_pm_clk_init returned error\n");
+			pr_err("msm_pm_clk_init returned error %d \n", ret);
 			return ret;
 		}
 	}

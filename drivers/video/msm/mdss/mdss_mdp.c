@@ -93,7 +93,7 @@ static struct mdss_panel_intf pan_types[] = {
 	{"edp", MDSS_PANEL_INTF_EDP},
 	{"hdmi", MDSS_PANEL_INTF_HDMI},
 };
-static char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
+char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
 
 struct mdss_iommu_map_type mdss_iommu_map[MDSS_IOMMU_MAX_DOMAIN] = {
 	[MDSS_IOMMU_DOMAIN_UNSECURE] = {
@@ -229,6 +229,8 @@ static irqreturn_t mdss_irq_handler(int irq, void *ptr)
 
 	mdata->irq_buzy = true;
 
+	MDSS_XLOG((intr & MDSS_INTR_MDP), (intr & MDSS_INTR_DSI0), XLOG_FUNC_ENTRY);
+
 	if (intr & MDSS_INTR_MDP) {
 		spin_lock(&mdp_lock);
 		mdss_irq_dispatch(MDSS_HW_MDP, irq, ptr);
@@ -248,6 +250,7 @@ static irqreturn_t mdss_irq_handler(int irq, void *ptr)
 		mdss_irq_dispatch(MDSS_HW_HDMI, irq, ptr);
 
 	mdata->irq_buzy = false;
+	MDSS_XLOG(XLOG_FUNC_EXIT);
 
 	return IRQ_HANDLED;
 }
@@ -389,6 +392,9 @@ static void mdss_mdp_bus_scale_unregister(struct mdss_data_type *mdata)
 		msm_bus_scale_unregister_client(mdata->bus_hdl);
 }
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+u64 bus_ab_quota_dbg, bus_ib_quota_dbg;
+#endif
 int mdss_mdp_bus_scale_set_quota(u64 ab_quota_rt, u64 ab_quota_nrt,
 		u64 ib_quota)
 {
@@ -442,7 +448,10 @@ int mdss_mdp_bus_scale_set_quota(u64 ab_quota_rt, u64 ab_quota_nrt,
 			vect = &bw_table->usecase[new_uc_idx].vectors[i];
 			vect->ab = ab_quota[i];
 			vect->ib = ib_quota;
-
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			bus_ab_quota_dbg = vect->ab;
+			bus_ib_quota_dbg = vect->ib;
+#endif
 			pr_debug("uc_idx=%d path_idx=%d ab=%llu ib=%llu\n",
 				new_uc_idx, i, vect->ab, vect->ib);
 		}
@@ -709,8 +718,7 @@ int mdss_iommu_ctrl(int enable)
 	int rc = 0;
 
 	mutex_lock(&mdp_iommu_lock);
-	pr_debug("%pS: enable %d mdata->iommu_ref_cnt %d\n",
-		__builtin_return_address(0), enable, mdata->iommu_ref_cnt);
+	MDSS_XLOG(__builtin_return_address(0), enable, mdata->iommu_ref_cnt);
 
 	if (enable) {
 
@@ -808,7 +816,7 @@ void mdss_mdp_clk_ctrl(int enable, int isr)
 		}
 	}
 
-	MDSS_XLOG(mdp_clk_cnt, changed, enable, current->pid);
+	MDSS_XLOG(__builtin_return_address(0), mdp_clk_cnt, changed, enable, current->pid);
 	pr_debug("%s: clk_cnt=%d changed=%d enable=%d\n",
 			__func__, mdp_clk_cnt, changed, enable);
 
@@ -1612,6 +1620,10 @@ int mdss_mdp_parse_dt_hw_settings(struct platform_device *pdev)
 	mdss_mdp_parse_dt_regs_array(mdp_arr, mdata->mdss_base,
 		hws + vbif_len, mdp_len);
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	mdata->mdss_io.base = mdata->mdss_base;
+#endif
+
 	mdata->hw_settings = hws;
 
 	return 0;
@@ -1690,6 +1702,7 @@ static int mdss_mdp_parse_dt(struct platform_device *pdev)
 		return rc;
 	}
 	mdata->mdp_base = mdata->mdss_base + data;
+
 	return 0;
 }
 
@@ -2868,6 +2881,14 @@ static void mdss_mdp_footswitch_ctrl(struct mdss_data_type *mdata, int on)
 		mdata->fs_ena = false;
 	}
 }
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+void mdss_mdp_underrun_clk_info(void)
+{
+	pr_info(" mdp_clk = %ld, bus_ab = %llu, bus_ib = %llu\n",
+		mdss_mdp_get_clk_rate(MDSS_CLK_MDP_SRC), bus_ab_quota_dbg, bus_ib_quota_dbg);
+}
+#endif
 
 /**
  * mdss_mdp_footswitch_ctrl_idle_pc() - MDSS GDSC control with idle power collapse

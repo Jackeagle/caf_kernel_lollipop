@@ -735,6 +735,9 @@ out:
 	kfree(n);
 	kfree(t);
 
+#ifdef CONFIG_ALWAYS_ENFORCE
+	selinux_enforcing = 1;
+#endif
 	if (!selinux_enforcing)
 		return 0;
 	return -EPERM;
@@ -1357,6 +1360,9 @@ out:
 	kfree(s);
 	kfree(t);
 	kfree(n);
+#ifdef CONFIG_ALWAYS_ENFORCE
+        selinux_enforcing = 1;
+#endif
 	if (!selinux_enforcing)
 		return 0;
 	return -EACCES;
@@ -1647,7 +1653,9 @@ static inline int convert_context_handle_invalid_context(struct context *context
 {
 	char *s;
 	u32 len;
-
+#ifdef CONFIG_ALWAYS_ENFORCE
+        selinux_enforcing = 1;
+#endif
 	if (selinux_enforcing)
 		return -EINVAL;
 
@@ -1840,6 +1848,8 @@ int security_load_policy(void *data, size_t len)
 	u16 map_size;
 	int rc = 0;
 	struct policy_file file = { data, len }, *fp = &file;
+
+	printk(KERN_INFO "SELinux: Reading policydb from 0x%p len:%zu...\n",data, len);
 
 	if (!ss_initialized) {
 		avtab_cache_init();

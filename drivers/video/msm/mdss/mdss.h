@@ -20,6 +20,7 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 #include <linux/irqreturn.h>
+#include <linux/mdss_io_util.h>
 
 #include <linux/msm_iommu_domains.h>
 
@@ -123,6 +124,7 @@ struct mdss_data_type {
 	size_t mdp_reg_size;
 	char __iomem *vbif_base;
 	char __iomem *mdp_base;
+	struct dss_io_data mdss_io;
 
 	struct mutex reg_lock;
 

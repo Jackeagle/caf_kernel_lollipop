@@ -422,6 +422,20 @@ config MSM_CPU_PWR_CTL
 	  Provides routines to power on cpu rails and l2 cache
 	  controller during coldboot.
 
+config RCU_STALL_DEBUG_PATCH
+	bool "Debug RCU Stall issue"
+	default n
+	help
+	  When RCU stall is detected, non secure watchdog is triggered. This will help in getting the exact
+	  issue context.
+
+config RPM_WAIT_FOR_ACK_DEBUG_PATCH
+	bool "Debug RPM wait for ACK issue"
+	default n
+	help
+	  Debug mechanism to debug the core waiting for RPM ack. This provides information wether the rpm-smd interrupts
+	  are unmasked.
+
 source "drivers/soc/qcom/memshare/Kconfig"
 
 endif # ARCH_MSM

@@ -725,6 +725,7 @@ static int csiphy_probe(struct platform_device *pdev)
 		GFP_KERNEL);
 	if (!new_csiphy_dev->ctrl_reg) {
 		pr_err("%s:%d kzalloc failed\n", __func__, __LINE__);
+		kfree(new_csiphy_dev);
 		return -ENOMEM;
 	}
 	v4l2_subdev_init(&new_csiphy_dev->msm_sd.sd, &msm_csiphy_subdev_ops);
@@ -742,7 +743,8 @@ static int csiphy_probe(struct platform_device *pdev)
 	rc = msm_csiphy_get_clk_info(new_csiphy_dev, pdev);
 	if (rc < 0) {
 		pr_err("%s: msm_csiphy_get_clk_info() failed", __func__);
-		return -EFAULT;
+		rc = -EFAULT;
+		goto csiphy_no_resource;
 	}
 
 	new_csiphy_dev->mem = platform_get_resource_byname(pdev,
@@ -823,7 +825,8 @@ static int csiphy_probe(struct platform_device *pdev)
 	} else {
 		pr_err("%s:%d, invalid hw version : 0x%x", __func__, __LINE__,
 		new_csiphy_dev->hw_dts_version);
-		return -EINVAL;
+		rc = -EINVAL;
+		goto csiphy_no_resource;
 	}
 
 	new_csiphy_dev->csiphy_state = CSIPHY_POWER_DOWN;
@@ -833,7 +836,7 @@ csiphy_no_resource:
 	mutex_destroy(&new_csiphy_dev->mutex);
 	kfree(new_csiphy_dev->ctrl_reg);
 	kfree(new_csiphy_dev);
-	return 0;
+	return rc;
 }
 
 static const struct of_device_id msm_csiphy_dt_match[] = {

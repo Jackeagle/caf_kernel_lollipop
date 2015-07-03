@@ -474,39 +474,71 @@ int msm_camera_config_single_vreg(struct device *dev,
 	struct camera_vreg_t *cam_vreg, struct regulator **reg_ptr, int config)
 {
 	int rc = 0;
+#ifdef CONFIG_MFD_RT5033_RESET_WA
+	int rt_rc = 0;
+#endif
+
 	if (config) {
 		if (!dev || !cam_vreg || !reg_ptr) {
 			pr_err("%s: get failed NULL parameter\n", __func__);
 			goto vreg_get_fail;
 		}
 		CDBG("%s enable %s\n", __func__, cam_vreg->reg_name);
-		*reg_ptr = regulator_get(dev, cam_vreg->reg_name);
-		if (IS_ERR_OR_NULL(*reg_ptr)) {
-			pr_err("%s: %s get failed\n", __func__,
-				cam_vreg->reg_name);
-			*reg_ptr = NULL;
-			goto vreg_get_fail;
-		}
-		if (cam_vreg->type == REG_LDO) {
-			rc = regulator_set_voltage(
-				*reg_ptr, cam_vreg->min_voltage,
-				cam_vreg->max_voltage);
-			if (rc < 0) {
-				pr_err("%s: %s set voltage failed\n",
-					__func__, cam_vreg->reg_name);
-				goto vreg_set_voltage_fail;
+		if (!strncmp(cam_vreg->reg_name, "cam_vdig", 8)) {
+			*reg_ptr = regulator_get(dev, "CAM_SENSOR_CORE_1.25V");
+			if (IS_ERR(*reg_ptr)) {
+				pr_err("%s: %s get failed\n", __func__,
+						cam_vreg->reg_name);
+				*reg_ptr = NULL;
+				goto vreg_get_fail;
 			}
-			if (cam_vreg->op_mode >= 0) {
-				rc = regulator_set_optimum_mode(*reg_ptr,
-					cam_vreg->op_mode);
+		} else if (!strncmp(cam_vreg->reg_name, "cam_vana", 8)) {
+			*reg_ptr = regulator_get(dev, "CAM_SENSOR_A2.8V");
+			if (IS_ERR(*reg_ptr)) {
+				pr_err("%s: %s get failed\n", __func__,
+						cam_vreg->reg_name);
+				*reg_ptr = NULL;
+				goto vreg_get_fail;
+			}
+		} else {
+			*reg_ptr = regulator_get(dev, cam_vreg->reg_name);
+			if (IS_ERR_OR_NULL(*reg_ptr)) {
+				pr_err("%s: %s get failed\n", __func__,
+					cam_vreg->reg_name);
+				*reg_ptr = NULL;
+				goto vreg_get_fail;
+			}
+			if (cam_vreg->type == REG_LDO) {
+				rc = regulator_set_voltage(
+					*reg_ptr, cam_vreg->min_voltage,
+					cam_vreg->max_voltage);
 				if (rc < 0) {
-					pr_err(
-					"%s: %s set optimum mode failed\n",
-					__func__, cam_vreg->reg_name);
-					goto vreg_set_opt_mode_fail;
+					pr_err("%s: %s set voltage failed\n",
+						__func__, cam_vreg->reg_name);
+					goto vreg_set_voltage_fail;
+				}
+				if (cam_vreg->op_mode >= 0) {
+					rc = regulator_set_optimum_mode(*reg_ptr,
+						cam_vreg->op_mode);
+					if (rc < 0) {
+						pr_err(
+						"%s: %s set optimum mode failed\n",
+						__func__, cam_vreg->reg_name);
+						goto vreg_set_opt_mode_fail;
+					}
 				}
 			}
 		}
+#ifdef CONFIG_MFD_RT5033_RESET_WA
+		if (!strncmp(cam_vreg->reg_name, "cam_vana", 8)){
+			rt_rc = regulator_get_status(*reg_ptr);
+			if(rt_rc == 2){
+				BUG_ON(1);
+			} else {
+				pr_err("[RT5033] result : 0x%x\n", rt_rc);
+			}
+		}
+#endif
 		rc = regulator_enable(*reg_ptr);
 		if (rc < 0) {
 			pr_err("%s: %s enable failed\n",

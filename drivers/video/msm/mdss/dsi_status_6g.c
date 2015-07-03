@@ -117,16 +117,24 @@ void mdss_check_dsi_ctrl_status(struct work_struct *work, uint32_t interval)
 
 	if ((pstatus_data->mfd->panel_power_on)) {
 		if (ret > 0) {
-			schedule_delayed_work(&pstatus_data->check_status,
-				msecs_to_jiffies(interval));
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			if (ctrl_pdata->status_mode != ESD_REG_IRQ)
+#endif
+				schedule_delayed_work(
+						&pstatus_data->check_status,
+						msecs_to_jiffies(interval));
 		} else {
 			char *envp[2] = {"PANEL_ALIVE=0", NULL};
 			pdata->panel_info.panel_dead = true;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			if (ctrl_pdata->status_mode == ESD_REG_IRQ)
+				msleep(interval);
+#endif
 			ret = kobject_uevent_env(
 				&pstatus_data->mfd->fbi->dev->kobj,
 							KOBJ_CHANGE, envp);
-			pr_err("%s: Panel has gone bad, sending uevent - %s\n",
-							__func__, envp[0]);
+			pr_err("%s: Panel has gone bad, sending uevent - %s, ret=%d\n",
+							__func__, envp[0], ret);
 		}
 	}
 }

@@ -336,6 +336,7 @@ static int clock_a53_probe(struct platform_device *pdev)
 					"qcom,speed%d-bin-v%d-%s",
 					speed_bin, version, mux_names[mux_id]);
 
+		pr_info("select speed bin table :[%s] on dts file\n", prop_name);
 		rc = of_get_fmax_vdd_class(pdev, &a53ssmux[mux_id]->c,
 								prop_name);
 		if (rc) {

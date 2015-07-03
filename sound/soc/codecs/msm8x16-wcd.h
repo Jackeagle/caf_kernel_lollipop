@@ -157,8 +157,6 @@ struct msm8916_asoc_mach_data {
 	struct mutex cdc_mclk_mutex;
 	struct delayed_work disable_mclk_work;
 	struct afe_digital_clk_cfg digital_cdc_clk;
-	void __iomem *vaddr_gpio_mux_spkr_ctl;
-	void __iomem *vaddr_gpio_mux_mic_ctl;
 };
 
 struct msm8x16_wcd_pdata {
@@ -216,6 +214,9 @@ struct msm8x16_wcd_priv {
 	bool ear_pa_boost_set;
 	bool dec_active[NUM_DECIMATORS];
 	struct on_demand_supply on_demand_list[ON_DEMAND_SUPPLIES_MAX];
+#ifdef CONFIG_SAMSUNG_JACK	
+	int micb_2_ref_cnt;	
+#endif
 	/* mbhc module */
 	struct wcd_mbhc mbhc;
 	struct blocking_notifier_head notifier;
@@ -235,6 +236,10 @@ extern int msm8x16_register_notifier(struct snd_soc_codec *codec,
 
 extern int msm8x16_unregister_notifier(struct snd_soc_codec *codec,
 				     struct notifier_block *nblock);
+#ifdef CONFIG_SAMSUNG_JACK
+extern int msm8x16_enable_micbias2(struct snd_soc_codec *codec,
+		bool enable);
+#endif
 
 #endif
 

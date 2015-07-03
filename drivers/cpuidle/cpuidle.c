@@ -17,9 +17,9 @@
 #include <linux/cpu.h>
 #include <linux/cpuidle.h>
 #include <linux/ktime.h>
+#include <linux/tick.h>
 #include <linux/hrtimer.h>
 #include <linux/module.h>
-#include <trace/events/power.h>
 
 #include "cpuidle.h"
 
@@ -93,7 +93,7 @@ int cpuidle_enter_state(struct cpuidle_device *dev, struct cpuidle_driver *drv,
 	if (diff > INT_MAX)
 		diff = INT_MAX;
 
-	dev->last_residency = (int) diff;
+	//dev->last_residency = (int) diff;
 
 	if (entered_state >= 0) {
 		/* Update cpuidle counters */
@@ -144,15 +144,6 @@ int cpuidle_idle_call(void)
 		return 0;
 	}
 
-	trace_cpu_idle_rcuidle(next_state, dev->cpu);
-
-	if (need_resched()) {
-		dev->last_residency = 0;
-		local_irq_enable();
-		entered_state = next_state;
-		goto exit;
-	}
-
 	if (drv->states[next_state].flags & CPUIDLE_FLAG_TIMER_STOP)
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_ENTER,
 				   &dev->cpu);
@@ -166,9 +157,6 @@ int cpuidle_idle_call(void)
 	if (drv->states[next_state].flags & CPUIDLE_FLAG_TIMER_STOP)
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_EXIT,
 				   &dev->cpu);
-
-exit:
-	trace_cpu_idle_rcuidle(PWR_EVENT_EXIT, dev->cpu);
 
 	/* give the governor an opportunity to reflect on the outcome */
 	if (cpuidle_curr_governor->reflect)

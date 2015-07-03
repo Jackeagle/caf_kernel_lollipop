@@ -1156,6 +1156,7 @@ static struct rcg_clk jpeg0_clk_src = {
 
 static struct clk_freq_tbl ftbl_gcc_camss_mclk0_1_2_clk[] = {
 	F(  24000000,      gpll6_mclk,  1,   1,    45),
+	F(  26024000,      gpll6_mclk,  1,   2,    83),
 	F(  66670000,	   gpll0_out_main,  12,	  0,	0),
 	F_END
 };
@@ -1408,7 +1409,11 @@ static struct rcg_clk mdp_clk_src = {
 	.c = {
 		.dbg_name = "mdp_clk_src",
 		.ops = &clk_ops_rcg,
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		VDD_DIG_FMAX_MAP3(LOW, 100000000, NOMINAL, 307200000, HIGH,
+#else
 		VDD_DIG_FMAX_MAP3(LOW, 153600000, NOMINAL, 307200000, HIGH,
+#endif
 			366670000),
 		CLK_INIT(mdp_clk_src.c),
 	},
@@ -3276,6 +3281,11 @@ static struct clk_lookup msm_clocks_gcc_8936_crypto[] = {
 	CLK_LOOKUP_OF("iface_clk",    gcc_crypto_ahb_clk,  "scm"),
 	CLK_LOOKUP_OF("bus_clk",      gcc_crypto_axi_clk,  "scm"),
 	CLK_LOOKUP_OF("core_clk_src", crypto_clk_src,      "scm"),
+
+	CLK_LOOKUP_OF("core_clk", 	gcc_crypto_clk, 	"mcd"),
+	CLK_LOOKUP_OF("iface_clk", 	gcc_crypto_ahb_clk, "mcd"),
+	CLK_LOOKUP_OF("bus_clk", 	gcc_crypto_axi_clk, "mcd"),
+	CLK_LOOKUP_OF("core_clk_src", crypto_clk_src, 	"mcd"),
 };
 
 /* Please note that the order of reg-names is important */

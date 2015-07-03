@@ -198,6 +198,7 @@ static DEFINE_SPINLOCK(reg_spinlock);
 #define	WCNSS_VBATT_LEVEL_IND         (WCNSS_CTRL_MSG_START + 8)
 #define	WCNSS_BUILD_VER_REQ           (WCNSS_CTRL_MSG_START + 9)
 #define	WCNSS_BUILD_VER_RSP           (WCNSS_CTRL_MSG_START + 10)
+#define WCNSS_CBC_COMPLETE_IND		(WCNSS_CTRL_MSG_START + 12)
 
 /* max 20mhz channel count */
 #define WCNSS_MAX_CH_NUM			45
@@ -246,7 +247,12 @@ static struct notifier_block wnb = {
 	.notifier_call = wcnss_notif_cb,
 };
 
+#if defined (CONFIG_MACH_A5U_KOR_OPEN)
+extern unsigned int system_rev;
+#define NVBIN_FILE (system_rev < 2) ? "wlan/prima/WCNSS_qcom_wlan_nv_noFEM.bin" : "wlan/prima/WCNSS_qcom_wlan_nv.bin"
+#else
 #define NVBIN_FILE "wlan/prima/WCNSS_qcom_wlan_nv.bin"
+#endif
 
 /* On SMD channel 4K of maximum data can be transferred, including message
  * header, so NV fragment size as next multiple of 1Kb is 3Kb.
@@ -382,6 +388,7 @@ static struct {
 	void __iomem *alarms_tactl;
 	void __iomem *fiq_reg;
 	int	nv_downloaded;
+	int	is_cbc_done;
 	unsigned char *fw_cal_data;
 	unsigned char *user_cal_data;
 	int	fw_cal_rcvd;
@@ -734,7 +741,7 @@ void wcnss_pronto_log_debug_regs(void)
 	reg3 = readl_relaxed(reg_addr);
 	pr_err("PMU_WLAN_AHB_CBCR %08x\n", reg3);
 
-	msleep(50);
+	mdelay(50);
 
 	if ((reg & PRONTO_PMU_WLAN_BCR_BLK_ARES) ||
 		(reg2 & PRONTO_PMU_WLAN_GDSCR_SW_COLLAPSE) ||
@@ -1155,6 +1162,7 @@ static void wcnss_smd_notify_event(void *data, unsigned int event)
 		pr_debug("wcnss: closing WCNSS SMD channel :%s",
 				WCNSS_CTRL_CHANNEL);
 		penv->nv_downloaded = 0;
+		penv->is_cbc_done = 0;
 		break;
 
 	default:
@@ -1412,6 +1420,14 @@ int wcnss_device_ready(void)
 	return 0;
 }
 EXPORT_SYMBOL(wcnss_device_ready);
+int wcnss_cbc_complete(void)
+{
+	if (penv && penv->pdev && penv->is_cbc_done &&
+		!wcnss_device_is_shutdown())
+		return 1;
+	return 0;
+}
+EXPORT_SYMBOL(wcnss_cbc_complete);
 
 int wcnss_device_is_shutdown(void)
 {
@@ -1602,8 +1618,12 @@ static int wcnss_wlan_suspend(struct device *dev)
 {
 	if (penv && dev && (dev == &penv->pdev->dev) &&
 	    penv->smd_channel_ready &&
-	    penv->pm_ops && penv->pm_ops->suspend)
-		return penv->pm_ops->suspend(dev);
+	    penv->pm_ops && penv->pm_ops->suspend) {
+
+	    wcnss_ldo18_off();
+	    pr_err("wcnss: wcnss_ldo18_off!!\n");
+	    return penv->pm_ops->suspend(dev);
+	}
 	return 0;
 }
 
@@ -1611,8 +1631,12 @@ static int wcnss_wlan_resume(struct device *dev)
 {
 	if (penv && dev && (dev == &penv->pdev->dev) &&
 	    penv->smd_channel_ready &&
-	    penv->pm_ops && penv->pm_ops->resume)
-		return penv->pm_ops->resume(dev);
+	    penv->pm_ops && penv->pm_ops->resume) {
+
+	    wcnss_ldo18_on();
+	    pr_err("wcnss: wcnss_ldo18_on!!\n");
+	    return penv->pm_ops->resume(dev);
+	}
 	return 0;
 }
 
@@ -1705,8 +1729,8 @@ static int wcnss_smd_tx(void *data, int len)
 
 static void wcnss_notify_vbat(enum qpnp_tm_state state, void *ctx)
 {
-	mutex_lock(&penv->vbat_monitor_mutex);
 	cancel_delayed_work_sync(&penv->vbatt_work);
+	mutex_lock(&penv->vbat_monitor_mutex);
 
 	if (state == ADC_TM_LOW_STATE) {
 		pr_debug("wcnss: low voltage notification triggered\n");
@@ -2056,6 +2080,11 @@ static void wcnssctrl_rx_handler(struct work_struct *worker)
 			fw_status);
 		break;
 
+	case WCNSS_CBC_COMPLETE_IND:
+		penv->is_cbc_done = 1;
+		pr_info("wcnss: received WCNSS_CBC_COMPLETE_IND from FW\n");
+		break;
+
 	case WCNSS_CALDATA_UPLD_REQ:
 		extract_cal_data(len);
 		break;
@@ -2103,6 +2132,12 @@ static void wcnss_nvbin_dnld(void)
 	struct device *dev = &penv->pdev->dev;
 
 	down_read(&wcnss_pm_sem);
+
+#if defined (CONFIG_MACH_A5U_KOR_OPEN)
+	pr_err("wcnss: system_rev = %02d\n", system_rev);
+	pr_err("wcnss: %s: calling request_firware for %s\n",
+		__func__, NVBIN_FILE);
+#endif
 
 	ret = request_firmware(&nv, NVBIN_FILE, dev);
 

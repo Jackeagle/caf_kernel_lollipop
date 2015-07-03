@@ -3610,6 +3610,13 @@ static void i2c_msm_pm_pinctrl_state(struct i2c_msm_ctrl *ctrl,
 		pins_state      = ctrl->rsrcs.gpio_state_suspend;
 		pins_state_name = I2C_MSM_PINCTRL_SUSPEND;
 	}
+	
+#if defined(CONFIG_SEC_E5_PROJECT) && defined(CONFIG_TOUCHSCREEN_MMS300_E) // for ISP firmup in Melfas
+	 if (!IS_ERR_OR_NULL(ctrl->dev->of_node->child) && (strncmp(ctrl->dev->of_node->child->name,"mms300-ts",sizeof("mms300-ts")) == 0)) {
+		//dev_info(ctrl->dev,"TSP(mms300-ts) i2c pinctrl was ignored");
+		return;
+	 }	
+#endif
 
 	if (!IS_ERR_OR_NULL(pins_state)) {
 		int ret = pinctrl_select_state(ctrl->rsrcs.pinctrl, pins_state);
@@ -4106,6 +4113,7 @@ static int i2c_msm_probe(struct platform_device *pdev)
 	 * reset the core before registering for interrupts. This solves an
 	 * interrupt storm issue when the bootloader leaves a pending interrupt.
 	 */
+	dev_info(&pdev->dev, "[BATT]ver.reset start\n");
 	ret = (*ctrl->ver.reset)(ctrl);
 	if (ret)
 		dev_err(ctrl->dev, "error error on qup software reset\n");
@@ -4127,6 +4135,7 @@ static int i2c_msm_probe(struct platform_device *pdev)
 	if (ret)
 		goto rcrcs_err;
 
+	dev_info(&pdev->dev, "[BATT]ver.reset done\n");
 	i2c_msm_dbgfs_init(ctrl);
 
 	ret = i2c_msm_frmwrk_reg(pdev, ctrl);
@@ -4134,6 +4143,7 @@ static int i2c_msm_probe(struct platform_device *pdev)
 		goto reg_err;
 
 	i2c_msm_dbg(ctrl, MSM_PROF, "probe() completed with success");
+	dev_info(&pdev->dev, "[BATT]probe() completed with success\n");
 	return 0;
 
 reg_err:
