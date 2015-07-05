@@ -354,7 +354,7 @@ static void mdss_mdp_cmd_pingpong_done(void *arg)
 	}
 	mdss_mdp_irq_disable_nosync(MDSS_MDP_IRQ_PING_PONG_COMP, ctx->pp_num);
 
-	MDSS_XLOG(ctl->num, atomic_read(&ctx->koff_cnt), ctx->clk_enabled,
+	MDSS_XLOG(ctl->num, ctx->koff_cnt, ctx->clk_enabled,
 					ctx->rdptr_enabled);
 
 	if (atomic_add_unless(&ctx->koff_cnt, -1, 0)) {
@@ -548,22 +548,8 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 		mask = BIT(MDSS_MDP_IRQ_PING_PONG_COMP + ctx->pp_num);
 		status = mask & readl_relaxed(ctl->mdata->mdp_base +
 				MDSS_MDP_REG_INTR_STATUS);
-		MDSS_XLOG(ctl->num, atomic_read(&ctx->koff_cnt), ctx->clk_enabled,
-				ctx->rdptr_enabled, status);
 		if (status) {
 			WARN(1, "pp done but irq not triggered\n");
-			if (!g_io_base)
-					g_io_base = ioremap(0x0B000000, 0x300);
-
-			if (!g_io_base) {
-					pr_err("GC ioremap failed\n");
-			} else {
-				pr_err("GC ioremap values 0x%x 0x%x 0x%x 0x%x\n",
-				readl(g_io_base+0x10C), readl(g_io_base+0x18C),
-				readl(g_io_base+0x20C), readl(g_io_base+0x28C));
-				MDSS_XLOG(readl(g_io_base+0x10C), readl(g_io_base+0x18C),
-					readl(g_io_base+0x20C),  readl(g_io_base+0x28C));
-			}
 			mdss_mdp_irq_clear(ctl->mdata,
 					MDSS_MDP_IRQ_PING_PONG_COMP,
 					ctx->pp_num);
@@ -574,14 +560,12 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 		}
 
 		rc = atomic_read(&ctx->koff_cnt) == 0;
-		MDSS_XLOG(rc,atomic_read(&ctx->koff_cnt));
 	}
 
 	if (rc <= 0) {
 		if (!ctx->pp_timeout_report_cnt) {
 			WARN(1, "cmd kickoff timed out (%d) ctl=%d\n",
 					rc, ctl->num);
-			MDSS_XLOG(atomic_read(&ctx->koff_cnt));
 			MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0", "dsi1",
 					"edp", "hdmi", "panic");
 		}

@@ -43,14 +43,8 @@
 #include <asm/arch_timer.h>
 #include <asm/cacheflush.h>
 #include "lpm-levels.h"
-#include "idle_utility.h"
-#include <linux/regulator/consumer.h>
-#include <linux/pinctrl/sec-pinmux.h>
-#include <linux/qpnp/pin.h>
-#ifdef CONFIG_SEC_GPIO_DVS
-#include <linux/secgpio_dvs.h>
-#endif
-#include <trace/events/power.h>
+#include "lpm-workarounds.h"
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/trace_msm_low_power.h>
 #ifdef CONFIG_CX_VOTE_TURBO
@@ -757,12 +751,13 @@ static void cluster_unprepare(struct lpm_cluster *cluster,
 #endif
 
 		msm_rpm_exit_sleep();
-#ifdef CONFIG_CX_VOTE_TURBO
-		queue_work(msm_lpm_wq, &dummy_vote_work);
-#endif
-#ifdef CONFIG_RPM_WAIT_FOR_ACK_DEBUG_PATCH
-		rpm_smd_int_sts = 0x2;
-#endif
+
+		/* If RPM bumps up CX to turbo, unvote CX turbo vote
+		 * during exit of rpm assisted power collapse to
+		 * reduce the power impact
+		 */
+
+		lpm_wa_cx_unvote_send();
 		msm_mpm_exit_sleep(from_idle);
 	}
 

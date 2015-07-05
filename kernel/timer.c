@@ -628,7 +628,6 @@ static inline void debug_assert_init(struct timer_list *timer)
 static void do_init_timer(struct timer_list *timer, unsigned int flags,
 			  const char *name, struct lock_class_key *key)
 {
-
 	struct tvec_base *base;
 
 #ifdef CONFIG_SMP

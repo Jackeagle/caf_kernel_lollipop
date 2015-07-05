@@ -141,9 +141,6 @@ struct cpufreq_interactive_tunables {
 	 * frequency.
 	 */
 	unsigned int max_freq_hysteresis;
-#if defined(CONFIG_ARCH_MSM8939)
-	unsigned int lpm_disable_freq;
-#endif
 };
 
 #if defined(CONFIG_ARCH_MSM8939)
@@ -702,17 +699,6 @@ static int cpufreq_interactive_speedchange_task(void *data)
 					pjcpu->hispeed_validate_time = hvt;
 				}
 			}
-
-#if defined(CONFIG_ARCH_MSM8939)
-			//Disable LPM Mode when cpu freq. rise up over than lpm_disable_freq.
-			tunables = pcpu->policy->governor_data;
-			if (pcpu->target_freq >= tunables->lpm_disable_freq){
-				lpm_set_mode(cpu_mask << cpu, power_level_mask << cpu*4, 0);
-			}
-			else {
-				lpm_set_mode(cpu_mask << cpu, power_level_mask << cpu*4, 1);
-			}
-#endif
 			trace_cpufreq_interactive_setspeed(cpu,
 						     pcpu->target_freq,
 						     pcpu->policy->cur);
@@ -1411,9 +1397,6 @@ show_store_gov_pol_sys(use_sched_load);
 show_store_gov_pol_sys(use_migration_notif);
 show_store_gov_pol_sys(max_freq_hysteresis);
 show_store_gov_pol_sys(align_windows);
-#if defined(CONFIG_ARCH_MSM8939)
-show_store_gov_pol_sys(lpm_disable_freq);
-#endif
 
 #define gov_sys_attr_rw(_name)						\
 static struct global_attr _name##_gov_sys =				\
@@ -1441,9 +1424,6 @@ gov_sys_pol_attr_rw(use_sched_load);
 gov_sys_pol_attr_rw(use_migration_notif);
 gov_sys_pol_attr_rw(max_freq_hysteresis);
 gov_sys_pol_attr_rw(align_windows);
-#if defined(CONFIG_ARCH_MSM8939)
-gov_sys_pol_attr_rw(lpm_disable_freq);
-#endif
 
 static struct global_attr boostpulse_gov_sys =
 	__ATTR(boostpulse, 0200, NULL, store_boostpulse_gov_sys);
@@ -1468,9 +1448,6 @@ static struct attribute *interactive_attributes_gov_sys[] = {
 	&use_migration_notif_gov_sys.attr,
 	&max_freq_hysteresis_gov_sys.attr,
 	&align_windows_gov_sys.attr,
-#if defined(CONFIG_ARCH_MSM8939)
-	&lpm_disable_freq_gov_sys.attr,
-#endif
 	NULL,
 };
 
@@ -1496,9 +1473,6 @@ static struct attribute *interactive_attributes_gov_pol[] = {
 	&use_migration_notif_gov_pol.attr,
 	&max_freq_hysteresis_gov_pol.attr,
 	&align_windows_gov_pol.attr,
-#if defined(CONFIG_ARCH_MSM8939)
-	&lpm_disable_freq_gov_pol.attr,
-#endif
 	NULL,
 };
 
@@ -1604,16 +1578,6 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 	struct cpufreq_interactive_tunables *tunables;
 	unsigned long flags;
 	int first_cpu;
-#if defined(CONFIG_ARCH_MSM8939)
-		//masking for little core
-		u8 cpu_mask=0xF0;
-		u32 power_level_mask=0x66660000;
-		//masking for big core
-		if (policy->cpu <= 3) {
-			cpu_mask = 0x0F;
-			power_level_mask = 0x00006666;
-		}
-#endif
 	if (have_governor_per_policy())
 		tunables = policy->governor_data;
 	else

@@ -1130,8 +1130,6 @@ static inline void clear_hmp_request(int cpu) { }
 
 #if defined(CONFIG_SCHED_HMP)
 
-//__read_mostly unsigned int sysctl_sched_ravg_hist_size = 5;
-
 /*
  * sched_window_stats_policy, sched_account_wait_time, sched_ravg_hist_size,
  * sched_migration_fixup, sched_freq_account_wait_time have a 'sysctl' copy
@@ -1810,6 +1808,7 @@ static void update_task_ravg(struct task_struct *p, struct rq *rq,
 	update_cpu_busy_time(p, rq, event, wallclock, irqtime);
 
 done:
+
 	trace_sched_update_task_ravg(p, rq, event, wallclock, irqtime);
 
 	p->ravg.mark_start = wallclock;
@@ -8614,9 +8613,6 @@ void __init sched_init(void)
 {
 	int i, j;
 	unsigned long alloc_size = 0, ptr;
-
-	sec_gaf_supply_rqinfo(offsetof(struct rq, curr),
-						  offsetof(struct cfs_rq, rq));
 
 	if (sched_enable_hmp)
 		pr_info("HMP scheduling enabled.\n");

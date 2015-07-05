@@ -1675,11 +1675,11 @@ extern void sched_set_io_is_busy(int val);
 #else
 static inline int sched_set_window(u64 window_start, unsigned int window_size)
 {
- return -EINVAL;
+	return -EINVAL;
 }
 static inline unsigned long sched_get_busy(int cpu)
 {
- return 0;
+	return 0;
 }
 static inline void sched_set_io_is_busy(int val) {};
 #endif

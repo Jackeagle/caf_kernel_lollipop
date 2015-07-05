@@ -373,7 +373,7 @@ Optional properties:
 				[0]: =>		the speed bin of the CPU. It may use the value 0xffffffff as a
 						wildcard to match any speed bin values.
 				[1]: =>		the PVS version of the CPU. It may use the value 0xffffffff as a
-							wildcard to match any PVS version values.
+						wildcard to match any PVS version values.
 				[2 - N+1]: =>	the floor voltage value in microvolts corresponding to each virtual
 						corner for this speed bin, ordered from lowest voltage corner to
 						highest voltage corner.

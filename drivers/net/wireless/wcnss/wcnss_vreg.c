@@ -191,7 +191,7 @@ int validate_iris_chip_id(u32 reg)
 	}
 }
 
-u32 wcnss_iris_reset(u32 reg, void __iomem *pmu_conf_reg)
+void  wcnss_iris_reset(u32 reg, void __iomem *pmu_conf_reg)
 {
 	/* Reset IRIS */
 	reg |= WCNSS_PMU_CFG_IRIS_RESET;
@@ -205,7 +205,6 @@ u32 wcnss_iris_reset(u32 reg, void __iomem *pmu_conf_reg)
 	/* Reset iris reset bit */
 	reg &= ~WCNSS_PMU_CFG_IRIS_RESET;
 	writel_relaxed(reg, pmu_conf_reg);
-	return reg;
 }
 
 static int
@@ -213,7 +212,7 @@ configure_iris_xo(struct device *dev,
 			struct wcnss_wlan_config *cfg,
 			int on, int *iris_xo_set)
 {
-	u32 reg = 0,i = 0;
+	u32 reg = 0, i = 0;
 	u32 iris_reg = WCNSS_INVALID_IRIS_REG;
 	int rc = 0;
 	int pmu_offset = 0;
@@ -284,17 +283,12 @@ configure_iris_xo(struct device *dev,
 			iris_reg = readl_relaxed(iris_read_reg);
 		}
 
-		reg = wcnss_iris_reset(reg, pmu_conf_reg);
+		wcnss_iris_reset(reg, pmu_conf_reg);
 
 		if (iris_reg != WCNSS_INVALID_IRIS_REG) {
 			iris_reg &= 0xffff;
 			iris_reg |= PRONTO_IRIS_REG_CHIP_ID;
 			writel_relaxed(iris_reg, iris_read_reg);
-
-			/* Iris read */
-			reg = readl_relaxed(pmu_conf_reg);
-			reg |= WCNSS_PMU_CFG_IRIS_XO_READ;
-			writel_relaxed(reg, pmu_conf_reg);
 			do {
 				/* Iris read */
 				reg = readl_relaxed(pmu_conf_reg);
@@ -515,119 +509,6 @@ fail:
 	return rc;
 
 }
-
-static struct vregs_info pronto_ldo18_info =
-{"qcom,pronto-ldo18",  VREG_NULL_CONFIG, 2700000, 0,
-	2700000, 10000,  NULL};
-
-void wcnss_ldo18_off (void)
-{
-
-	int rc=0;
-
-	if (pronto_ldo18_info.state == VREG_NULL_CONFIG)
-		return;
-
-	/* Remove PWM mode */
-	if (pronto_ldo18_info.state & VREG_OPTIMUM_MODE_MASK) {
-		rc = regulator_set_optimum_mode(
-				pronto_ldo18_info.regulator, 0);
-		if (rc < 0)
-			pr_err("regulator_set_optimum_mode failed\n");
-	}
-
-	/* Set voltage to lowest level */
-	if (pronto_ldo18_info.state & VREG_SET_VOLTAGE_MASK) {
-		rc = regulator_set_voltage(pronto_ldo18_info.regulator,
-				pronto_ldo18_info.low_power_min,
-				pronto_ldo18_info.max_voltage);
-		if (rc)
-			pr_err("regulator_set_voltage(%s) failed (%d)\n",
-					pronto_ldo18_info.name, rc);
-	}
-
-	/* Disable regulator */
-	if (pronto_ldo18_info.state & VREG_ENABLE_MASK) {
-		rc = regulator_disable(pronto_ldo18_info.regulator);
-		if (rc < 0)
-			pr_err("vreg %s disable failed (%d)\n",
-					pronto_ldo18_info.name, rc);
-	}
-
-	/* Free the regulator source */
-	if (pronto_ldo18_info.state & VREG_GET_REGULATOR_MASK)
-		regulator_put(pronto_ldo18_info.regulator);
-
-	pronto_ldo18_info.state = VREG_NULL_CONFIG;
-
-}
-EXPORT_SYMBOL(wcnss_ldo18_off);
-
-
-int wcnss_ldo18_on(void)
-{
-
-	int rc = 0, reg_cnt=0;
-	struct platform_device *pdev = wcnss_get_platform_device();
-
-	if (IS_ERR(pdev))
-	{
-		rc = PTR_ERR (pdev);
-		pr_err("failed to wcnss_get_platform_device()\n");
-		goto fail;
-	}
-
-	/* Get regulator source */
-	pronto_ldo18_info.regulator = regulator_get(&pdev->dev, pronto_ldo18_info.name);
-	if (IS_ERR(pronto_ldo18_info.regulator)) {
-		rc = PTR_ERR(pronto_ldo18_info.regulator);
-		pr_err("regulator get failed\n");
-		goto fail;
-	}
-
-	pronto_ldo18_info.state |= VREG_GET_REGULATOR_MASK;
-	reg_cnt = regulator_count_voltages(pronto_ldo18_info.regulator);
-	/* Set voltage to nominal. Exclude swtiches e.g. LVS */
-	if ((pronto_ldo18_info.nominal_min || pronto_ldo18_info.max_voltage)
-			&& (reg_cnt > 0)) {
-		rc = regulator_set_voltage(pronto_ldo18_info.regulator,
-				pronto_ldo18_info.nominal_min,
-				pronto_ldo18_info.max_voltage);
-		if (rc) {
-			pr_err("regulator_set_voltage(%s) failed (%d)\n",pronto_ldo18_info.name, rc);
-
-			goto fail;
-		}
-		pronto_ldo18_info.state |= VREG_SET_VOLTAGE_MASK;
-	}
-
-	/* Vote for PWM/PFM mode if needed */
-	if (pronto_ldo18_info.uA_load && (reg_cnt > 0)) {
-		rc = regulator_set_optimum_mode(pronto_ldo18_info.regulator,
-				pronto_ldo18_info.uA_load);
-		if (rc < 0) {
-			pr_err("regulator_set_optimum_mode failed\n");
-			goto fail;
-		}
-		pronto_ldo18_info.state |= VREG_OPTIMUM_MODE_MASK;
-	}
-
-	/* Enable the regulator */
-	rc = regulator_enable(pronto_ldo18_info.regulator);
-	if (rc) {
-		pr_err("vreg enable failed\n");
-		goto fail;
-	}
-	pronto_ldo18_info.state |= VREG_ENABLE_MASK;
-
-	return rc;
-
-fail:
-	wcnss_ldo18_off();
-	return rc;
-
-}
-EXPORT_SYMBOL(wcnss_ldo18_on);
 
 static void wcnss_iris_vregs_off(enum wcnss_hw_type hw_type,
 					int is_pronto_vt)

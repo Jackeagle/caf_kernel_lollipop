@@ -31,10 +31,7 @@
 #include <linux/task_work.h>
 
 #include <trace/events/sched.h>
-#ifdef CONFIG_SCHED_HMP
-#include <linux/proc_fs.h>
-#define FIRST_CORE_LC 4
-#endif
+
 #include "sched.h"
 
 /*
@@ -1447,18 +1444,6 @@ int sched_get_cpu_mostly_idle_nr_run(int cpu)
 	return rq->mostly_idle_nr_run;
 }
 
-void set_hmp_deboost_defaults(void)
-{
-	sched_small_task =
-		pct_to_real(100);
-
-	sched_upmigrate =
-		pct_to_real(100);
-
-	sched_downmigrate =
-		pct_to_real(95);
-}
-
 /*
  * 'load' is in reference to "best cpu" at its best frequency.
  * Scale that in reference to a given cpu, accounting for how bad it is
@@ -1774,7 +1759,7 @@ static int best_small_task_cpu(struct task_struct *p, int sync)
 	int min_cstate = INT_MAX;
 	int min_fallback_cpu_cost = INT_MAX;
 	int min_cost = INT_MAX;
-	int i, j, cstate, cpu_cost;
+	int i, cstate, cpu_cost;
 	u64 load, min_busy_load = ULLONG_MAX;
 	int cost_list[nr_cpu_ids];
 	struct cpumask search_cpus;
@@ -1803,20 +1788,11 @@ static int best_small_task_cpu(struct task_struct *p, int sync)
 	/* Optimization to steer task towards the minimum power
 	   cost CPU. The tradeoff is that we may have to check
 	   the same information again in pass 2 */
+	if (!cpu_rq(min_cost_cpu)->cstate && mostly_idle_cpu_sync(min_cost_cpu, sync))
+		return min_cost_cpu;
+
 	for_each_cpu(i, &search_cpus) {
-		if (cost_list[i] > min_cost)
-			continue;
-		if (!cpu_rq(i)->cstate && mostly_idle_cpu_sync(i, sync))
-			return i;
-	}
-
-	for (j=FIRST_CORE_LC; j<(FIRST_CORE_LC+nr_cpu_ids); j++) {
-		struct rq *rq;
-		i=j%nr_cpu_ids;
-		if ( !cpumask_test_cpu(i, &search_cpus) )
-			continue;
-
-		rq = cpu_rq(i);
+		struct rq *rq = cpu_rq(i);
 		cstate = rq->cstate;
 
 		if (power_delta_exceeded(cost_list[i], min_cost)) {
@@ -2199,11 +2175,18 @@ int sched_hmp_proc_update_handler(struct ctl_table *table, int write,
 	int update_min_nice = 0;
 
 	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
 	if (ret || !write || !sched_enable_hmp)
 		return ret;
 
 	if (write && (old_val == *data))
 		return 0;
+
+	if ((sysctl_sched_downmigrate_pct > sysctl_sched_upmigrate_pct) ||
+				*data > 100) {
+		*data = old_val;
+		return -EINVAL;
+	}
 
 	if (data == (unsigned int *)&sysctl_sched_upmigrate_min_nice)
 		update_min_nice = 1;
@@ -2429,12 +2412,13 @@ static inline int nr_big_tasks(struct rq *rq)
 #else	/* CONFIG_SCHED_HMP */
 
 #define sched_enable_power_aware 0
+
 static inline int task_will_fit(struct task_struct *p, int cpu)
 {
 	return 1;
 }
 
-static inline int select_best_cpu(struct task_struct *p, int target, int reason, int sync)
+static inline int select_best_cpu(struct task_struct *p, int target, int reason)
 {
 	return 0;
 }
@@ -5376,10 +5360,6 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 			env->busiest_nr_running <= env->busiest_grp_capacity)
 		return 0;
 
-	if (!task_will_fit(p, env->dst_cpu) &&
-			env->busiest_nr_running <= env->busiest_grp_capacity)
-		return 0;
-
 	if (!cpumask_test_cpu(env->dst_cpu, tsk_cpus_allowed(p))) {
 		int cpu;
 
@@ -8019,49 +7999,3 @@ __init void init_sched_fair_class(void)
 #endif /* SMP */
 
 }
-
-#ifdef CONFIG_SCHED_HMP
-static ssize_t write_sched_deboost(struct file *file, const char __user *buf,
-									size_t count, loff_t *ppos)
-{
-
-	if (count) {
-		char c;
-
-		if (get_user(c, buf))
-			return -EFAULT;
-
-		if (c != '1' && c != '0')
-			return -EINVAL;
-
-		get_online_cpus();
-		pre_big_small_task_count_change(cpu_online_mask);
-
-		if(c == '1')
-			set_hmp_deboost_defaults();
-		else
-			set_hmp_defaults();
-
-		post_big_small_task_count_change(cpu_online_mask);
-		put_online_cpus();
-	}
-
-	return count;
-}
-
-static const struct file_operations proc_sched_deboost_operations = {
-	.write	=	write_sched_deboost,
-	.llseek =	noop_llseek,
-};
-
-static __init int init_sched_deboost(void)
-{
-	if(!proc_create("sched_deboost",S_IWUSR|S_IWGRP, NULL,
-					&proc_sched_deboost_operations))
-		pr_err("Failed to register proc interface\n");
-
-		return 0;
-}
-late_initcall(init_sched_deboost);
-#endif
-
