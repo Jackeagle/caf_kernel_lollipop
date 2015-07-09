@@ -144,11 +144,6 @@ static DEFINE_SPINLOCK(reg_spinlock);
 #define CCU_PRONTO_LAST_ADDR1_OFFSET		0x10
 #define CCU_PRONTO_LAST_ADDR2_OFFSET		0x14
 
-#define CCU_PRONTO_AOWBR_ERR_ADDR_OFFSET	0x28
-#define CCU_PRONTO_AOWBR_TIMEOUT_REG_OFFSET	0xcc
-#define CCU_PRONTO_AOWBR_ERR_TIMEOUT_OFFSET	0xd0
-#define CCU_PRONTO_A2AB_ERR_ADDR_OFFSET		0x18
-
 #define PRONTO_SAW2_SPM_STS_OFFSET		0x0c
 
 #define PRONTO_PLL_STATUS_OFFSET		0x1c
@@ -427,7 +422,6 @@ static struct {
 	struct pm_qos_request wcnss_pm_qos_request;
 	int pc_disabled;
 	struct delayed_work wcnss_pm_qos_del_req;
-	struct mutex pm_qos_mutex;
 } *penv = NULL;
 
 static ssize_t wcnss_wlan_macaddr_store(struct device *dev,
@@ -679,22 +673,6 @@ void wcnss_pronto_log_debug_regs(void)
 	reg_addr = penv->pronto_ccpu_base + CCU_PRONTO_LAST_ADDR2_OFFSET;
 	reg = readl_relaxed(reg_addr);
 	pr_err("CCU_CCPU_LAST_ADDR2 %08x\n", reg);
-
-	reg_addr = penv->pronto_ccpu_base + CCU_PRONTO_AOWBR_ERR_ADDR_OFFSET;
-	reg = readl_relaxed(reg_addr);
-	pr_err("CCU_PRONTO_AOWBR_ERR_ADDR_OFFSET %08x\n", reg);
-
-	reg_addr = penv->pronto_ccpu_base + CCU_PRONTO_AOWBR_TIMEOUT_REG_OFFSET;
-	reg = readl_relaxed(reg_addr);
-	pr_err("CCU_PRONTO_AOWBR_TIMEOUT_REG_OFFSET %08x\n", reg);
-
-	reg_addr = penv->pronto_ccpu_base + CCU_PRONTO_AOWBR_ERR_TIMEOUT_OFFSET;
-	reg = readl_relaxed(reg_addr);
-	pr_err("CCU_PRONTO_AOWBR_ERR_TIMEOUT_OFFSET %08x\n", reg);
-
-	reg_addr = penv->pronto_ccpu_base + CCU_PRONTO_A2AB_ERR_ADDR_OFFSET;
-	reg = readl_relaxed(reg_addr);
-	pr_err("CCU_PRONTO_A2AB_ERR_ADDR_OFFSET %08x\n", reg);
 
 	tst_addr = penv->pronto_a2xb_base + A2XB_TSTBUS_OFFSET;
 	tst_ctrl_addr = penv->pronto_a2xb_base + A2XB_TSTBUS_CTRL_OFFSET;
@@ -1135,26 +1113,22 @@ void wcnss_pm_qos_update_request(int val)
 
 void wcnss_disable_pc_remove_req(void)
 {
-	mutex_lock(&penv->pm_qos_mutex);
 	if (penv->pc_disabled) {
-		penv->pc_disabled = 0;
 		wcnss_pm_qos_update_request(WCNSS_ENABLE_PC_LATENCY);
 		wcnss_pm_qos_remove_request();
 		wcnss_allow_suspend();
+		penv->pc_disabled = 0;
 	}
-	mutex_unlock(&penv->pm_qos_mutex);
 }
 
 void wcnss_disable_pc_add_req(void)
 {
-	mutex_lock(&penv->pm_qos_mutex);
 	if (!penv->pc_disabled) {
 		wcnss_pm_qos_add_request();
 		wcnss_prevent_suspend();
 		wcnss_pm_qos_update_request(WCNSS_DISABLE_PC_LATENCY);
 		penv->pc_disabled = 1;
 	}
-	mutex_unlock(&penv->pm_qos_mutex);
 }
 
 static void wcnss_smd_notify_event(void *data, unsigned int event)
@@ -1644,12 +1618,9 @@ static int wcnss_wlan_suspend(struct device *dev)
 {
 	if (penv && dev && (dev == &penv->pdev->dev) &&
 	    penv->smd_channel_ready &&
-	    penv->pm_ops && penv->pm_ops->suspend) {
+	    penv->pm_ops && penv->pm_ops->suspend)
 
-	    wcnss_ldo18_off();
-	    pr_err("wcnss: wcnss_ldo18_off!!\n");
 	    return penv->pm_ops->suspend(dev);
-	}
 	return 0;
 }
 
@@ -1657,12 +1628,9 @@ static int wcnss_wlan_resume(struct device *dev)
 {
 	if (penv && dev && (dev == &penv->pdev->dev) &&
 	    penv->smd_channel_ready &&
-	    penv->pm_ops && penv->pm_ops->resume) {
+	    penv->pm_ops && penv->pm_ops->resume)
 
-	    wcnss_ldo18_on();
-	    pr_err("wcnss: wcnss_ldo18_on!!\n");
 	    return penv->pm_ops->resume(dev);
-	}
 	return 0;
 }
 
@@ -3084,7 +3052,6 @@ wcnss_wlan_probe(struct platform_device *pdev)
 	mutex_init(&penv->dev_lock);
 	mutex_init(&penv->ctrl_lock);
 	mutex_init(&penv->vbat_monitor_mutex);
-	mutex_init(&penv->pm_qos_mutex);
 	init_waitqueue_head(&penv->read_wait);
 
 	/* Since we were built into the kernel we'll be called as part
