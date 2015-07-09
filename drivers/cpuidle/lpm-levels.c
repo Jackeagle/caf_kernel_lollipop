@@ -44,6 +44,14 @@
 #include <asm/cacheflush.h>
 #include "lpm-levels.h"
 #include "lpm-workarounds.h"
+#include "idle_utility.h"
+#include <linux/regulator/consumer.h>
+#include <linux/pinctrl/sec-pinmux.h>
+#include <linux/qpnp/pin.h>
+#ifdef CONFIG_SEC_GPIO_DVS
+#include <linux/secgpio_dvs.h>
+#endif
+#include <trace/events/power.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/trace_msm_low_power.h>
