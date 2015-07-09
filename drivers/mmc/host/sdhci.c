@@ -2070,9 +2070,6 @@ static void sdhci_do_set_ios(struct sdhci_host *host, struct mmc_ios *ios)
 	 */
 	if (ios->power_mode == MMC_POWER_OFF) {
 		sdhci_writel(host, 0, SDHCI_SIGNAL_ENABLE);
-		host->hc_pwrctrl_reg = sdhci_readl(host, HC_VENDOR_SPEC_PWR_REG);
-		pr_err("%s: %s: HC_VEN_PWR_REG before reset all 0x%x\n",
-				mmc_hostname(host->mmc), __func__, host->hc_pwrctrl_reg);
 		sdhci_reinit(host);
 		host->pwr = 0;
 	}

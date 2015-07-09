@@ -1429,15 +1429,6 @@ int wcnss_cbc_complete(void)
 }
 EXPORT_SYMBOL(wcnss_cbc_complete);
 
-int wcnss_cbc_complete(void)
-{
-	if (penv && penv->pdev && penv->is_cbc_done &&
-		!wcnss_device_is_shutdown())
-		return 1;
-	return 0;
-}
-EXPORT_SYMBOL(wcnss_cbc_complete);
-
 int wcnss_device_is_shutdown(void)
 {
 	if (penv && penv->is_shutdown)
@@ -2087,10 +2078,6 @@ static void wcnssctrl_rx_handler(struct work_struct *worker)
 		fw_status = wcnss_fw_status();
 		pr_debug("wcnss: received WCNSS_CALDATA_DNLD_RSP from ccpu %u\n",
 			fw_status);
-		break;
-	case WCNSS_CBC_COMPLETE_IND:
-		penv->is_cbc_done = 1;
-		pr_info("wcnss: received WCNSS_CBC_COMPLETE_IND from FW\n");
 		break;
 
 	case WCNSS_CBC_COMPLETE_IND:
